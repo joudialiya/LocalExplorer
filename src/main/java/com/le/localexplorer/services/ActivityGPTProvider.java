@@ -21,14 +21,14 @@ public class ActivityGPTProvider implements IActivityProviderService {
     @Autowired
     NewPlacesAPIService placesAPIService;
     @Autowired
-    HttpSession session;
-    @Autowired
     ISessionService sessionService;
-    final String OPENAI_KEY = "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";
+    final String OPENAI_KEY = "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";
     final Random random = new Random();
     public Activity next() throws IOException, InterruptedException, ApiException {
         UserSession user = sessionService.get();
-        double factor = calculateGoOutsideFactor(user.getTime().getHour(), user.getWeatherCondition());
+        double factor = calculateGoOutsideFactor(
+                user.getTime().getHour(),
+                user.getWeatherCondition());
         System.out.println("GoOutsideFactor: " + factor);
         if (random.nextDouble(0, 1) <= factor)
             // outdoor activity
@@ -39,19 +39,19 @@ public class ActivityGPTProvider implements IActivityProviderService {
     }
 
     public double calculateGoOutsideFactor(int time, String weatherCondition) {
-        double goOutsideFactor = 0.5; // Initialize factor
+        double goOutsideFactor = 0.2; // Initialize factor
 
-        // Time based adjustments:
-        if (time >= 8 && time <= 20) { // Daytime
+        // time based adjustments
+        if (time >= 8 && time <= 20) { // daytime
             goOutsideFactor += .2;
-        } else if (time >= 4 && time <= 7) { // Early morning
+        } else if (time >= 4 && time <= 7) { // morning
             goOutsideFactor += .1;
-        } else if (time >= 21 && time <= 23) { // Evening
-            goOutsideFactor += 0.5;
-        } else { // Nighttime (0-3)
+        } else if (time >= 21 && time <= 23) { // evening
+            goOutsideFactor += 0.3;
+        } else { // nighttime (0-3)
             goOutsideFactor -= .1;
         }
-        // Weather based adjustments:
+        // weather based adjustments
         if (weatherCondition.equals(OMResponse.WeatherConditions.CLEAR) ||
                 weatherCondition.equals(OMResponse.WeatherConditions.MAINLY_CLEAR) ||
                 weatherCondition.equals(OMResponse.WeatherConditions.PARTLY_CLEAR)) {
@@ -66,7 +66,7 @@ public class ActivityGPTProvider implements IActivityProviderService {
                 weatherCondition.equals(OMResponse.WeatherConditions.SNOWY)) {
             goOutsideFactor -= .15;
         }
-        // Ensure factor stays within a reasonable range:
+        // ensure factor stays within a reasonable range
         goOutsideFactor = Math.max(goOutsideFactor, 0);
         goOutsideFactor = Math.min(goOutsideFactor, 1.);
 
@@ -74,17 +74,21 @@ public class ActivityGPTProvider implements IActivityProviderService {
     }
     public Activity generateIndoorActivity() throws IOException, InterruptedException {
 
+        System.out.println("indoor");
+
         UserSession user = sessionService.get();
 
         Activity activity = new Activity();
+
+        // generate an activity description
         String prompt = "Give me directly an in indoor fun activity that i can do\n";
 
         prompt = prompt + "i will let u know that the whether outside is kinda " +
                 user.getWeatherCondition().replace('_', ' ').toLowerCase() +
                 " and the current time is " + user.getTime().toString() + "\n" +
-                "Compile the information and provide me with a simple brief description of 70 word max of the activity without mentioning " +
+                "Compile the informations and provide me with a simple brief description of 70 word max " +
+                "of the activity without mentioning " +
                 "that you have analysed the weather or the time directly.\n";
-        System.out.println("indoor");
 
         GPTRequest request = new GPTRequest().addMessage(GPTMessage.USER, prompt);
         GPTResponse response = new GPTClient(OPENAI_KEY).send(request);
@@ -100,12 +104,13 @@ public class ActivityGPTProvider implements IActivityProviderService {
     // an out dor activity is generated based on the place
     public Activity generateOutdoorActivity() throws IOException, InterruptedException, ApiException {
 
-        UserSession user = (UserSession) session.getAttribute("sessionObject");
+        UserSession user = sessionService.get();
 
         Activity activity = new Activity();
         // we select a place
         Place place = getRecomendedPlace();
 
+        // generate an activity description
         String prompt = "Place name: " + place.displayName.text + "\n" +
                 "Place types: " + place.types + "\n" +
                 "Give me directly one fun little outdoor activity based on the given place information.\n" +
@@ -126,10 +131,11 @@ public class ActivityGPTProvider implements IActivityProviderService {
         return activity;
     }
 
-    // this function recommend a place it can be ran dom place from the nearby, or based on the user preferences
+    // this function recommend a place, it can be random place from the nearby,
+    // or based on the user preferences
     public Place getRecomendedPlace() throws IOException, InterruptedException {
-        // we set an exploration threshold, so that the system som times select a place randomly
-        // not based on the user preferences, to introduce exploration
+        // we set an exploration threshold, so that the system sometimes select a place randomly
+        // and not based on the user preferences, to introduce exploration
         final double exploration_factor = .25;
         if (random.nextDouble(0, 1) < exploration_factor)
         {
@@ -138,6 +144,29 @@ public class ActivityGPTProvider implements IActivityProviderService {
         else {
             return getScoreBasedPlace();
         }
+    }
+    public Place getRandomPlace() throws IOException, InterruptedException {
+        UserSession user = sessionService.get();
+        // get the types
+        List<String> types = new ArrayList<>(user.getPreferences().keySet());
+
+        List<Place> places = null;
+
+        // iterate randomly through the types till we find a type in witch there are places
+        while (places == null || places.isEmpty()) {
+
+            Collections.shuffle(types);
+            String selectedType = types.get(random.nextInt(0, types.size()));
+
+            System.out.println(selectedType);
+            places = placesAPIService.next(
+                    user.getLongitude(),
+                    user.getLatitude(),
+                    Collections.singletonList(selectedType)).places;
+            types.remove(selectedType);
+        }
+        // select a ran dom place from that type
+        return places.get(random.nextInt(0, places.size()));
     }
     public Place getScoreBasedPlace() throws IOException, InterruptedException {
         UserSession user = sessionService.get();
@@ -190,29 +219,6 @@ public class ActivityGPTProvider implements IActivityProviderService {
 
         System.out.println("Places list: " + places);
         // we find the places, we select one place randomly
-        return places.get(random.nextInt(0, places.size()));
-    }
-    public Place getRandomPlace() throws IOException, InterruptedException {
-        UserSession user = sessionService.get();
-        // get the types
-        List<String> types = new ArrayList<>(user.getPreferences().keySet());
-
-        List<Place> places = null;
-
-        // iterate randomly through the types till we find a type in witch there are places
-        while (places == null || places.isEmpty()) {
-
-            Collections.shuffle(types);
-            String selectedType = types.get(random.nextInt(0, types.size()));
-
-            System.out.println(selectedType);
-            places = placesAPIService.next(
-                    user.getLongitude(),
-                    user.getLatitude(),
-                    Collections.singletonList(selectedType)).places;
-            types.remove(selectedType);
-        }
-        // select a ran dom place from that type
         return places.get(random.nextInt(0, places.size()));
     }
 }

@@ -22,15 +22,11 @@ import java.util.HashMap;
 @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 public class SuggestionsController{
     @Autowired
-    OldPlacesAPIProvider placeProvider;
+    IActivityProviderService activityGPTProvider;
     @Autowired
-    ActivityGPTProvider activityGPTProvider;
+    IWeatherService weatherOpenMeteoService;
     @Autowired
-    WeatherOpenMeteoService weatherOpenMeteoService;
-    @Autowired
-    TimeAPIService timeAPIService;
-    @Autowired
-    HttpSession session;
+    ITimeService timeAPIService;
     @Autowired
     ISessionService sessionService;
 
@@ -42,7 +38,7 @@ public class SuggestionsController{
             throws IOException, InterruptedException, ApiException {
 
         UserSession user;
-        // retrieve the session object
+        // retrieve the user session object
         if (sessionService.isNew())
             user = sessionService.create(longitude, latitude);
         else

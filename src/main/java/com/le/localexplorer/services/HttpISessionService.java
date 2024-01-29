@@ -64,6 +64,8 @@ public class HttpISessionService implements ISessionService {
                 .build();
         // initialize the preferences map
         List<String> types = new ArrayList<>();
+        // I've chosen to initialize it with only entertainment and sports type of people,
+        // we can add more types we want to
         types.addAll(Arrays.asList(PlacesRequest.entertainment));
         types.addAll(Arrays.asList(PlacesRequest.sports));
         for (var type: types)

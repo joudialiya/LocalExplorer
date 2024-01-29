@@ -26,6 +26,7 @@ public class GPTClient {
                 .build();
 
         response = HttpClient.newHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        System.out.println(response.body());
         return new Gson().fromJson(response.body(), GPTResponse.class);
     }
 }
